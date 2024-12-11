@@ -2,6 +2,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+
 class PositionalEncoding(nn.Module):
      def __init__(self, d_model, max_len=512):
         super().__init__()
@@ -22,6 +23,7 @@ class PositionalEncoding(nn.Module):
             return x
 
 
+
 class MLP(nn.Module):
     def __init__(self, hidden_dim, mlp_dim):
         super().__init__()
@@ -35,6 +37,7 @@ class MLP(nn.Module):
         return x
 
 
+
 class SelfAttention(nn.Module):
     def __init__(self, input_dim, num_heads, dropout=0.0):
         super().__init__()
@@ -46,7 +49,20 @@ class SelfAttention(nn.Module):
 
 
 
-         
-
 class TransformerBlock():
-    pass
+    def __init__(self, d_model, n_heads, d_ff, dropout=0.1):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(d_model)
+        self.attn = nn.MultiheadAttention(d_model, n_heads, dropout)
+        self.ln2 = nn.LayerNorm(d_model)
+        self.mlp = nn.MLP(hidden_dim, mlp_dim)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        # Self-attention
+        attn_output, _ = self.attn(x, x, x)
+        x = x + self.dropout(attn_output)
+        # Feed-forward
+        ff_output = self.ff(self.ln2(x))
+        x = x + self.dropout(ff_output)
+        return x
