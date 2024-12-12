@@ -48,14 +48,76 @@ class SelfAttention(nn.Module):
         return out
 
 
+class CausalAttention(nn.Module):
+    def __init__(self, embed_dim, num_heads, dropout):
+        super().__init__()
+
+        assert embed_dim % num_heads == 0, "embed_dim must be divisible by num_heads."
+
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+        
+        #Q, K, V projections
+        self.q_proj = nn.Linear(embed_dim, embed_dim)
+        self.k_proj = nn.Linear(embed_dim, embed_dim)
+        self.v_proj = nn.Linear(embed_dim, embed_dim)
+        # Output linear layer
+        self.out_proj = nn.Linear(embed_dim, embed_dim)
+        # Dropout layer
+        self.attn_dropout = nn.Dropout(dropout)
+
+        def forward(self, x):
+            batch_size, seq_length, embed_dim = x.size()
+
+            # Apply projections to query, keys and values
+            Q = self.q_proj(x)
+            K = self.k_proj(x) 
+            V = self.v_proj(x)  
+
+            # Reshape and transpose for multi-head attention
+            # New shape: (batch_size, num_heads, seq_length, head_dim)
+            Q = Q.view(batch_size, seq_length, self.num_heads, self.head_dim).transpose(1, 2)
+            K = K.view(batch_size, seq_length, self.num_heads, self.head_dim).transpose(1, 2)
+            V = V.view(batch_size, seq_length, self.num_heads, self.head_dim).transpose(1, 2)
+
+            # Compute scaled dot-product attention
+            scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.head_dim)
+
+            # Create a causal mask to ensure that each position can only attend to previous positions
+            # Mask shape: (1, 1, seq_length, seq_length)
+            mask = torch.tril(torch.ones(seq_length, seq_length, device=x.device)).unsqueeze(0).unsqueeze(0)
+            scores = scores.masked_fill(mask == 0, float('-inf'))
+
+            # Apply softmax to get attention probabilities
+            attn_probs = F.softmax(scores, dim=-1)
+            attn_probs = self.attn_dropout(attn_probs)  # Apply dropout
+
+            # Weighted sum of values
+            # Output shape: (batch_size, num_heads, seq_length, head_dim)
+            attn_output = torch.matmul(attn_probs, V)
+
+            # Concatenate heads and project to output dimension
+            # First, transpose to (batch_size, seq_length, num_heads, head_dim)
+            attn_output = attn_output.transpose(1, 2).contiguous()
+            # Then, reshape to (batch_size, seq_length, embed_dim)
+            attn_output = attn_output.view(batch_size, seq_length, embed_dim)
+
+            # Final linear projection
+            output = self.out_proj(attn_output)  # (batch_size, seq_length, embed_dim)
+
+            return output
+
+
 
 class TransformerBlock():
     def __init__(self, d_model, n_heads, d_ff, dropout=0.1):
         super().__init__()
+        # Transformer block as it is in the Attention is all you need paper
         self.ln1 = nn.LayerNorm(d_model)
-        self.attn = nn.MultiheadAttention(d_model, n_heads, dropout)
+        self.attn = CausalAttention(d_model, n_heads, dropout)
         self.ln2 = nn.LayerNorm(d_model)
-        self.mlp = nn.MLP(hidden_dim, mlp_dim)
+        self.mlp = MLP(hidden_dim, mlp_dim)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
