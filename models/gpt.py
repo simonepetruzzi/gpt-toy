@@ -7,6 +7,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+from models import PositionalEncoding, TransformerBlock
 
 class GPT(nn.Module):
 
@@ -88,6 +89,7 @@ class GPT(nn.Module):
 
         return logits, loss
 
+    # Method for generating text    
     @torch.no_grad()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
         for _ in range(max_new_tokens):
