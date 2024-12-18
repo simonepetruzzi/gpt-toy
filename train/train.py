@@ -28,6 +28,21 @@ def train(cfg: DictConfig):
     
     device = torch.device(cfg.device if torch.cuda.is_available() else "cpu")
 
+    # Experiment name and settings
+    exp_name = cfg.experiment_name
+    device = torch.device(cfg.device)
+    experiment_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
+    experiment_dir, checkpoints_dir = make_experiment_directory(experiment_dir)
+
+    # Logger
+    config_dict = OmegaConf.to_container(cfg, resolve=True)
+    pprint(config_dict)
+    logger = instantiate(cfg.logger, settings=str(config_dict), dir=experiment_dir)
+
+    # Initialize dataset and dataloader
+    training_args = cfg.training
+    dataset = instantiate(cfg.dataset)
+
     # Load the dataset
     dataset = OpenWebTextDataset(cfg.dataset.data_dir, cfg.dataset.block_size)
     train_loader = DataLoader(dataset.train_dataset, batch_size=cfg.training.train_batch_size, shuffle=True, num_workers=cfg.training.num_workers)
