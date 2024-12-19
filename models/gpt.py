@@ -7,7 +7,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from models import PositionalEncoding, TransformerBlock
+from .models import PositionalEncoding, TransformerBlock
 
 class GPT(nn.Module):
 

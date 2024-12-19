@@ -13,6 +13,7 @@ from hydra.utils import instantiate
 from pprint import pprint
 from torch.utils.data import Subset
 
+from utils import save_checkpoint
 
 try:
     import wandb
@@ -42,12 +43,71 @@ def train(cfg: DictConfig):
     # Initialize dataset and dataloader
     training_args = cfg.training
     dataset = instantiate(cfg.dataset)
+    train_loader = dataset.train_loader
+    val_loader = dataset.val_loader
+    test_loader = dataset.test_loader
+    
+     # Initialize model
+    model = instantiate(cfg.model).to(device)
 
-    # Load the dataset
-    dataset = OpenWebTextDataset(cfg.dataset.data_dir, cfg.dataset.block_size)
-    train_loader = DataLoader(dataset.train_dataset, batch_size=cfg.training.train_batch_size, shuffle=True, num_workers=cfg.training.num_workers)
-    val_loader = DataLoader(dataset.val_dataset, batch_size=cfg.training.eval_batch_size, shuffle=False, num_workers=cfg.training.num_workers)
+    #Load checkpoints (to do)
+    
+    # Main loss
+    main_loss = instantiate(cfg.loss.classification_loss)
 
-    # Initialize model
-    model = GPT(cfg.model.n_layer, cfg.model.n_head, cfg.model.n_embd, cfg.model.vocab_size, cfg.model.dropout)
-    model.to(device)
+    # Additional loss (to do)
+
+    # Metrics
+    metric = torchmetrics.Perplexity()
+
+    # Optimizer and scheduler
+    optimizer = instantiate(cfg.optimizer, params = model.parameters())
+    scheduler = None  
+    if 'scheduler' in cfg:
+        scheduler = instantiate(cfg.scheduler, optimizer=optimizer)
+
+    # Training loop
+    for epoch in range(training_args.num_epochs):
+        model.train()
+        total_loss = 0.0
+
+        for batch in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{training_args.num_epochs}"):
+            inputs = batch["input_ids"].to(device)
+            labels = batch["labels"].to(device)
+            optimizer.zero_grad()
+
+            # Forward pass
+            outputs = model(inputs, labels=labels)
+            logits = outputs.logits
+
+            # Calculate loss
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            loss = main_loss(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+
+            # Backpropagation
+            loss.backward()
+            clip_grad_norm_(model.parameters(), training_args.max_grad_norm)
+            optimizer.step()
+
+            # Update metrics
+            total_loss += loss.item()
+            perplexity_metric.update(loss)
+
+        # Log metrics
+        avg_loss = total_loss / len(train_loader)
+        avg_perplexity = perplexity_metric.compute()
+
+        print(f"Epoch {epoch + 1}: Loss = {avg_loss:.4f}, Perplexity = {avg_perplexity:.4f}")
+
+        # Log metrics to logger
+        if wandb:
+            wandb.log({"epoch": epoch + 1, "loss": avg_loss, "perplexity": avg_perplexity})
+
+        # Save checkpoint if validation loss improves
+        if avg_loss < best_loss:
+            best_loss = avg_loss
+            save_checkpoint(model, optimizer, epoch + 1, checkpoints_dir, scheduler=scheduler, best_loss=best_loss)
+
+        # Reset perplexity metric for the next epoch
+        perplexity_metric.reset()
