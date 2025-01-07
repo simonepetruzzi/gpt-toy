@@ -1,6 +1,6 @@
 import os, sys
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from torchvision import transforms as t
 import torch
 from torch.utils.data import DataLoader
@@ -13,7 +13,7 @@ from hydra.utils import instantiate
 from pprint import pprint
 from torch.utils.data import Subset
 
-from utils import save_checkpoint
+from utils.utils import save_checkpoint
 
 try:
     import wandb
@@ -21,11 +21,11 @@ except ImportError:
     print('Wandb is not installed. If you want to use it, please install it with pip install wandb')
     wandb = None
 
-
-@hydra.main(version_base=None, config_path="../configs", config_name="train_config")
+@hydra.main(version_base=None, config_path="../configs", config_name="train_config.yaml")
 
 def train(cfg: DictConfig):
     torch.manual_seed(cfg.seed)
+
     
     device = torch.device(cfg.device if torch.cuda.is_available() else "cpu")
 
@@ -84,6 +84,7 @@ def train(cfg: DictConfig):
             shift_logits = logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
             loss = main_loss(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+            print(f"Batch {i}/{len(train_loader)}: Loss = {loss.item():.4f}")
 
             # Backpropagation
             loss.backward()
@@ -92,11 +93,13 @@ def train(cfg: DictConfig):
 
             # Update metrics
             total_loss += loss.item()
-            perplexity_metric.update(loss)
+            # Update metrics with logits and labels, not the loss
+            metric.update(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+
 
         # Log metrics
         avg_loss = total_loss / len(train_loader)
-        avg_perplexity = perplexity_metric.compute()
+        avg_perplexity = metric.compute()
 
         print(f"Epoch {epoch + 1}: Loss = {avg_loss:.4f}, Perplexity = {avg_perplexity:.4f}")
 
@@ -110,4 +113,9 @@ def train(cfg: DictConfig):
             save_checkpoint(model, optimizer, epoch + 1, checkpoints_dir, scheduler=scheduler, best_loss=best_loss)
 
         # Reset perplexity metric for the next epoch
-        perplexity_metric.reset()
+        metric.reset()
+
+
+
+if __name__ == '__main__':
+     train()

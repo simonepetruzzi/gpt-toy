@@ -1,0 +1,4 @@
+num_epochs: 10
+batch_size: 16
+max_grad_norm: 1.0
+logging_steps: 100

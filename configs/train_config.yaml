@@ -32,6 +32,5 @@ defaults:
   - training: base
   - optimizer: adam
   - scheduler: null
-  - loss: crossentropy
-  - noise: no_noise 
+  - loss: crossentropy 
   - _self_

@@ -1,0 +1,8 @@
+_target_: "gpt.GPT"
+vocab_size: 30522         # Small vocabulary size (e.g., GPT-2's base vocabulary size)
+block_size: 128           # Context length
+n_embd: 256               # Embedding size
+n_head: 4                 # Number of attention heads
+n_layer: 6                # Number of transformer blocks
+mlp_dim: 1024             # Dimension of feed-forward layer
+dropout: 0.1              # Dropout rate
